@@ -1,7 +1,14 @@
 package warpcache
 
 import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	warp "github.com/PierreZ/Warp10Exporter"
@@ -61,13 +68,53 @@ func NewSingleCache(s Selector, c Configuration) (*SingleCache, error) {
 	}
 
 	cache := SingleCache{}
+	cache.selector = s
 	cache.config = c
 	cache.Errors = make(chan error)
 	cache.cache.done = make(chan bool)
 
+	err = cache.initiate()
+	if err != nil {
+		return nil, err
+	}
+
 	go cache.watch()
 
 	return &cache, nil
+}
+
+func (c *SingleCache) initiate() error {
+
+	body, err := generateFetchSingleWarpScript(c.config.ReadToken, c.selector.String())
+
+	if err != nil {
+		return err
+	}
+	var resp *http.Response
+	resp, err = c.config.HTTPClient.Post(c.config.HTTPProtocol+"://"+os.Getenv("ENDPOINT")+"/api/v0/exec", "", strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 200 {
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return errors.New(string(dump))
+	}
+
+	defer resp.Body.Close()
+
+	money := make([]float64, 1)
+
+	err = json.NewDecoder(resp.Body).Decode(&money)
+	if err != nil {
+		return err
+	}
+	log.Println("money is at", money)
+	c.v = money[0]
+	return nil
 }
 
 func (c *SingleCache) watch() {
@@ -104,7 +151,10 @@ beginning:
 			c.Errors <- err
 			continue
 		}
-		c.Set(value)
+
+		c.mux.Lock()
+		c.v = value
+		c.mux.Unlock()
 	}
 	goto beginning
 }

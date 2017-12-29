@@ -9,6 +9,8 @@ func parseInputFormat(message string) (string, map[string]string, float64, error
 
 	message = strings.Replace(message, "\n", "", -1)
 
+	// TODO: check if contains KO
+
 	var classname string
 	labels := make(map[string]string)
 	var value float64
