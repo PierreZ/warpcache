@@ -1,7 +1,6 @@
 package warpcache
 
 import (
-	"log"
 	"net/url"
 	"time"
 
@@ -13,20 +12,20 @@ import (
 // To watch multiple GTS at the same time, please use MultipleCache
 type SingleCache struct {
 	cache
-	value float64
+	v float64
 }
 
 // Get is returning the latest value for a SingleCache
 func (c *SingleCache) Get() float64 {
 	c.mux.Lock()
 	defer c.mux.Unlock()
-	return c.value
+	return c.v
 }
 
 // Set is setting a new value. Cache is updated and a new datapoint is pushed
 func (c *SingleCache) Set(f float64) {
 	c.mux.Lock()
-	c.value = f
+	c.v = f
 	c.mux.Unlock()
 
 	// Pushing datapoint
@@ -102,7 +101,8 @@ beginning:
 		var value float64
 		_, _, value, err = parseInputFormat(string(message))
 		if err != nil {
-			log.Panic(err)
+			c.Errors <- err
+			continue
 		}
 		c.Set(value)
 	}
