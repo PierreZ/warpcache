@@ -106,14 +106,13 @@ func (c *SingleCache) initiate() error {
 
 	defer resp.Body.Close()
 
-	money := make([]float64, 1)
+	value := make([]float64, 1)
 
-	err = json.NewDecoder(resp.Body).Decode(&money)
+	err = json.NewDecoder(resp.Body).Decode(&value)
 	if err != nil {
 		return err
 	}
-	log.Println("money is at", money)
-	c.v = money[0]
+	c.v = value[0]
 	return nil
 }
 

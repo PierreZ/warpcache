@@ -1,7 +1,14 @@
 package warpcache
 
 import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	warp "github.com/PierreZ/Warp10Exporter"
@@ -27,6 +34,8 @@ func (c *MultipleCache) Set(label string, f float64) {
 	c.mux.Lock()
 	c.v[label] = f
 	c.mux.Unlock()
+
+	log.Println("pivot:", c.pivot, ",label:", label)
 
 	// Pushing datapoint
 	gts := warp.NewGTS(c.cache.selector.Classname).AddLabel(c.pivot, label)
@@ -54,14 +63,57 @@ func NewMultipleCache(s Selector, pivot string, c Configuration) (*MultipleCache
 	c.setDefault()
 
 	cache := MultipleCache{}
+	cache.v = map[string]float64{}
+	cache.selector = s
 	cache.config = c
 	cache.Errors = make(chan error)
 	cache.cache.done = make(chan bool)
 	cache.pivot = pivot
 
+	err := cache.initiate()
+	if err != nil {
+		return nil, err
+	}
+
 	go cache.watch()
 
 	return &cache, nil
+}
+
+func (c *MultipleCache) initiate() error {
+
+	body, err := generateFetchMultipleWarpScript(c.config.ReadToken, c.selector.String(), c.pivot)
+
+	if err != nil {
+		return err
+	}
+	var resp *http.Response
+	resp, err = c.config.HTTPClient.Post(c.config.HTTPProtocol+"://"+os.Getenv("ENDPOINT")+"/api/v0/exec", "", strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 200 {
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return errors.New(string(dump))
+	}
+
+	defer resp.Body.Close()
+
+	assetsResponse := make([]map[string]float64, 1)
+
+	err = json.NewDecoder(resp.Body).Decode(&assetsResponse)
+	if err != nil {
+		return err
+	}
+	assets := assetsResponse[0]
+	for name, number := range assets {
+		c.v[name] = number
+	}
+	return nil
 }
 
 func (c *MultipleCache) watch() {
@@ -99,8 +151,10 @@ beginning:
 			c.Errors <- err
 			continue
 		}
-		label := labels[c.pivot]
-		c.Set(label, value)
+		c.mux.Lock()
+		c.v[labels[c.pivot]] = value
+		c.mux.Unlock()
+
 	}
 	goto beginning
 }
