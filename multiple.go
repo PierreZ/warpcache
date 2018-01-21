@@ -57,6 +57,18 @@ func (c *MultipleCache) close() {
 	c.cache.done <- true
 }
 
+// Copy is returning a copy of the map
+func (c *MultipleCache) Copy() map[string]float64 {
+	targetMap := make(map[string]float64)
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	// Copy from the original map to the target map
+	for key, value := range c.v {
+		targetMap[key] = value
+	}
+	return targetMap
+}
+
 // NewMultipleCache is creating a new MultipleCache
 func NewMultipleCache(s Selector, pivot string, c Configuration) (*MultipleCache, error) {
 
