@@ -35,8 +35,6 @@ func (c *MultipleCache) Set(label string, f float64) {
 	c.v[label] = f
 	c.mux.Unlock()
 
-	log.Println("pivot:", c.pivot, ",label:", label)
-
 	// Pushing datapoint
 	gts := warp.NewGTS(c.cache.selector.Classname).AddLabel(c.pivot, label)
 	gts.AddDatapoint(time.Now(), f)
